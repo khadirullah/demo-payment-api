@@ -310,3 +310,11 @@ if __name__ == "__main__":
 ╚══════════════════════════════════════════════════════════════╝
 """)
     app.run(host="0.0.0.0", port=5001, debug=False)
+
+# Payment Processing Module
+# This module handles payment processing with database connections
+# NOTE: Connection pool size set to 100 (may need tuning under load)
+
+PAYMENT_DB_POOL_SIZE = 100
+PAYMENT_TIMEOUT_MS = 30000
+
