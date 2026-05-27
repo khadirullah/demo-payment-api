@@ -13,10 +13,13 @@ Usage:
     python3 app.py
 """
 
+import json
 import os
 import sys
 import time
 import random
+import urllib.request
+import urllib.error
 import sentry_sdk
 from flask import Flask, jsonify, request, render_template
 
@@ -46,6 +49,12 @@ if DSN:
 else:
     print("⚠️  SENTRY_DSN not set. Errors won't be sent to Sentry.")
     print("   Run: export SENTRY_DSN=https://your-key@sentry.io/project-id")
+
+SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
+if SLACK_WEBHOOK_URL:
+    print(f"✅ Slack webhook configured")
+else:
+    print("⚠️  SLACK_WEBHOOK_URL not set. Slack notifications disabled.")
 
 # ─── Flask App ───────────────────────────────────────────────────────────────
 
@@ -80,10 +89,36 @@ def list_payments():
     return jsonify({"data": MOCK_PAYMENTS, "total": len(MOCK_PAYMENTS)})
 
 
+# ─── Slack Notification ─────────────────────────────────────────────────────
+
+SEVERITY_EMOJI = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
+
+def _notify_slack(err_class_name, message, tags):
+    """Send an alert to Slack #incidents channel via Incoming Webhook."""
+    if not SLACK_WEBHOOK_URL:
+        return
+    severity = tags.get("severity", "medium")
+    emoji = SEVERITY_EMOJI.get(severity, "⚪")
+    service = tags.get("service", "unknown")
+    host = tags.get("host", "unknown")
+    payload = {
+        "text": f"{emoji} *[{severity.upper()}] {err_class_name}* on `{service}` (`{host}`)\n> {message}",
+    }
+    try:
+        req = urllib.request.Request(
+            SLACK_WEBHOOK_URL,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as e:
+        print(f"⚠️  Slack notification failed: {e}")
+
+
 # ─── Error Trigger Endpoints ────────────────────────────────────────────────
 
 def _send_error(err_class, message, tags, context=None):
-    """Capture an error explicitly and send to Sentry, return JSON response."""
+    """Capture an error explicitly and send to Sentry + Slack."""
     with sentry_sdk.new_scope() as scope:
         for k, v in tags.items():
             scope.set_tag(k, v)
@@ -95,12 +130,14 @@ def _send_error(err_class, message, tags, context=None):
         except Exception:
             event_id = sentry_sdk.capture_exception()
     sentry_sdk.flush(timeout=3)
+    _notify_slack(err_class.__name__, message, tags)
     return jsonify({
         "error": err_class.__name__,
         "message": message,
         "event_id": str(event_id),
         "status": "error_sent_to_sentry",
-        "note": "This error was captured by Sentry! Check your dashboard."
+        "slack_notified": bool(SLACK_WEBHOOK_URL),
+        "note": "Error captured by Sentry + Slack notified!"
     }), 500
 
 
@@ -223,6 +260,7 @@ def trigger_all():
                 except Exception:
                     event_id = sentry_sdk.capture_exception()
                     errors_sent.append({"error": err_class.__name__, "message": msg, "event_id": str(event_id)})
+            _notify_slack(err_class.__name__, msg, tags)
             time.sleep(0.3)
         except Exception as e:
             errors_sent.append({"error": err_class.__name__, "message": msg, "failed": str(e)})
@@ -232,7 +270,8 @@ def trigger_all():
         "status": "all_errors_triggered",
         "count": len(errors_sent),
         "errors": errors_sent,
-        "note": "Check Sentry dashboard in 1-2 minutes to see all errors"
+        "slack_notified": bool(SLACK_WEBHOOK_URL),
+        "note": "Check Sentry dashboard + Slack #incidents channel!"
     })
 
 
