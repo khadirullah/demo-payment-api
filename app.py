@@ -22,6 +22,16 @@ from flask import Flask, jsonify, request, render_template
 
 # ─── Sentry Setup ────────────────────────────────────────────────────────────
 
+# Auto-load .env file if it exists (so you don't need to `source .env` manually)
+_env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+if os.path.exists(_env_file):
+    with open(_env_file) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                os.environ.setdefault(key.strip(), value.strip())
+
 DSN = os.environ.get("SENTRY_DSN", "")
 
 if DSN:
@@ -72,107 +82,112 @@ def list_payments():
 
 # ─── Error Trigger Endpoints ────────────────────────────────────────────────
 
+def _send_error(err_class, message, tags, context=None):
+    """Capture an error explicitly and send to Sentry, return JSON response."""
+    with sentry_sdk.new_scope() as scope:
+        for k, v in tags.items():
+            scope.set_tag(k, v)
+        if context:
+            for ctx_name, ctx_data in context.items():
+                scope.set_context(ctx_name, ctx_data)
+        try:
+            raise err_class(message)
+        except Exception:
+            event_id = sentry_sdk.capture_exception()
+    sentry_sdk.flush(timeout=3)
+    return jsonify({
+        "error": err_class.__name__,
+        "message": message,
+        "event_id": str(event_id),
+        "status": "error_sent_to_sentry",
+        "note": "This error was captured by Sentry! Check your dashboard."
+    }), 500
+
+
 @app.route("/trigger/db-connection")
 def trigger_db_error():
     """Simulate database connection failure."""
-    sentry_sdk.set_tag("service", "payment-api")
-    sentry_sdk.set_tag("host", "web-server-01")
-    sentry_sdk.set_tag("severity", "critical")
-    sentry_sdk.set_context("database", {
-        "host": "postgres-primary:5432",
-        "active_connections": 100,
-        "max_connections": 100,
-        "pool_exhausted": True,
-    })
-    raise ConnectionError("Connection refused to postgres-primary:5432 — max connections reached (100/100)")
+    return _send_error(
+        ConnectionError,
+        "Connection refused to postgres-primary:5432 — max connections reached (100/100)",
+        {"service": "payment-api", "host": "web-server-01", "severity": "critical"},
+        {"database": {"host": "postgres-primary:5432", "active_connections": 100, "max_connections": 100, "pool_exhausted": True}},
+    )
 
 
 @app.route("/trigger/timeout")
 def trigger_timeout():
     """Simulate API request timeout."""
-    sentry_sdk.set_tag("service", "payment-api")
-    sentry_sdk.set_tag("host", "web-server-02")
-    sentry_sdk.set_tag("severity", "high")
-    sentry_sdk.set_context("request", {
-        "endpoint": "/api/v2/payments/process",
-        "method": "POST",
-        "timeout_ms": 30000,
-    })
-    raise TimeoutError("Request timeout after 30000ms on /api/v2/payments/process")
+    return _send_error(
+        TimeoutError,
+        "Request timeout after 30000ms on /api/v2/payments/process",
+        {"service": "payment-api", "host": "web-server-02", "severity": "high"},
+        {"request": {"endpoint": "/api/v2/payments/process", "method": "POST", "timeout_ms": 30000}},
+    )
 
 
 @app.route("/trigger/oom")
 def trigger_oom():
     """Simulate OOM kill."""
-    sentry_sdk.set_tag("service", "batch-processor")
-    sentry_sdk.set_tag("host", "worker-03")
-    sentry_sdk.set_tag("severity", "critical")
-    sentry_sdk.set_context("memory", {
-        "limit_mb": 2048,
-        "used_mb": 2150,
-        "process": "batch-processor",
-    })
-    raise MemoryError("OOM killed: worker-3 exceeded 2GB memory limit during batch processing")
+    return _send_error(
+        MemoryError,
+        "OOM killed: worker-3 exceeded 2GB memory limit during batch processing",
+        {"service": "batch-processor", "host": "worker-03", "severity": "critical"},
+        {"memory": {"limit_mb": 2048, "used_mb": 2150, "process": "batch-processor"}},
+    )
 
 
 @app.route("/trigger/redis")
 def trigger_redis():
     """Simulate Redis cluster failure."""
-    sentry_sdk.set_tag("service", "cache-layer")
-    sentry_sdk.set_tag("host", "web-server-01")
-    sentry_sdk.set_tag("severity", "critical")
-    sentry_sdk.set_context("redis", {
-        "node": "redis-03:6379",
-        "cluster_size": 3,
-        "healthy_nodes": 2,
-    })
-    raise ConnectionError("Redis cluster node redis-03:6379 unreachable — failover triggered")
+    return _send_error(
+        ConnectionError,
+        "Redis cluster node redis-03:6379 unreachable — failover triggered",
+        {"service": "cache-layer", "host": "web-server-01", "severity": "critical"},
+        {"redis": {"node": "redis-03:6379", "cluster_size": 3, "healthy_nodes": 2}},
+    )
 
 
 @app.route("/trigger/config")
 def trigger_config():
     """Simulate missing configuration."""
-    sentry_sdk.set_tag("service", "config-loader")
-    sentry_sdk.set_tag("host", "web-server-03")
-    sentry_sdk.set_tag("severity", "medium")
-    raise ValueError("Invalid configuration: missing required env var DB_HOST in deployment config")
+    return _send_error(
+        ValueError,
+        "Invalid configuration: missing required env var DB_HOST in deployment config",
+        {"service": "config-loader", "host": "web-server-03", "severity": "medium"},
+    )
 
 
 @app.route("/trigger/disk")
 def trigger_disk():
     """Simulate disk space critical."""
-    sentry_sdk.set_tag("service", "docker-daemon")
-    sentry_sdk.set_tag("host", "build-server-01")
-    sentry_sdk.set_tag("severity", "high")
-    sentry_sdk.set_context("disk", {
-        "mount": "/var/lib/docker",
-        "usage_percent": 95,
-        "available_gb": 2.3,
-    })
-    raise OSError("Disk space critical: /var/lib/docker at 95% capacity on build-server-01")
+    return _send_error(
+        OSError,
+        "Disk space critical: /var/lib/docker at 95% capacity on build-server-01",
+        {"service": "docker-daemon", "host": "build-server-01", "severity": "high"},
+        {"disk": {"mount": "/var/lib/docker", "usage_percent": 95, "available_gb": 2.3}},
+    )
 
 
 @app.route("/trigger/ssl")
 def trigger_ssl():
     """Simulate SSL certificate expiry."""
-    sentry_sdk.set_tag("service", "api-gateway")
-    sentry_sdk.set_tag("host", "gateway-01")
-    sentry_sdk.set_tag("severity", "critical")
-    raise ConnectionError("SSL certificate expired for api.internal.company.com — all HTTPS requests failing")
+    return _send_error(
+        ConnectionError,
+        "SSL certificate expired for api.internal.company.com — all HTTPS requests failing",
+        {"service": "api-gateway", "host": "gateway-01", "severity": "critical"},
+    )
 
 
 @app.route("/trigger/k8s-crash")
 def trigger_k8s():
     """Simulate Kubernetes CrashLoopBackOff."""
-    sentry_sdk.set_tag("service", "payment-api")
-    sentry_sdk.set_tag("host", "k8s-node-02")
-    sentry_sdk.set_tag("severity", "critical")
-    sentry_sdk.set_context("kubernetes", {
-        "pod": "payment-api-7d4f8b6c9-x2k4m",
-        "restart_count": 5,
-        "namespace": "production",
-    })
-    raise RuntimeError("Kubernetes pod CrashLoopBackOff: payment-api-7d4f8b6c9-x2k4m restarted 5 times in 10 minutes")
+    return _send_error(
+        RuntimeError,
+        "Kubernetes pod CrashLoopBackOff: payment-api-7d4f8b6c9-x2k4m restarted 5 times in 10 minutes",
+        {"service": "payment-api", "host": "k8s-node-02", "severity": "critical"},
+        {"kubernetes": {"pod": "payment-api-7d4f8b6c9-x2k4m", "restart_count": 5, "namespace": "production"}},
+    )
 
 
 @app.route("/trigger/all")
