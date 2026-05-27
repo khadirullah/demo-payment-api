@@ -318,4 +318,16 @@ if __name__ == "__main__":
 K8S_MEMORY_LIMIT = "2Gi"
 K8S_CPU_LIMIT = "500m"
 K8S_RESTART_POLICY = "Always"
+# Redis Caching Configuration
+# Added caching layer for payment lookups
+# NOTE: Redis cluster has 3 nodes, failover is automatic
+
+REDIS_CLUSTER_NODES = ["redis-01:6379", "redis-02:6379", "redis-03:6379"]
+REDIS_CACHE_TTL = 300
+# Payment Processing Module
+# This module handles payment processing with database connections
+# NOTE: Connection pool size set to 100 (may need tuning under load)
+
+PAYMENT_DB_POOL_SIZE = 100
+PAYMENT_TIMEOUT_MS = 30000
 
