@@ -310,3 +310,12 @@ if __name__ == "__main__":
 ╚══════════════════════════════════════════════════════════════╝
 """)
     app.run(host="0.0.0.0", port=5001, debug=False)
+
+# Kubernetes Deployment Configuration
+# Updated pod resource limits and restart policies
+# NOTE: Memory limit set to 2GB, may cause OOM under heavy batch jobs
+
+K8S_MEMORY_LIMIT = "2Gi"
+K8S_CPU_LIMIT = "500m"
+K8S_RESTART_POLICY = "Always"
+
