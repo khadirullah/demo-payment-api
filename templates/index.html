@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo Payment API — Error Trigger</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0e1a;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+        .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+            padding: 2rem;
+            background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(236,72,153,0.1));
+            border-radius: 16px;
+            border: 1px solid rgba(99,102,241,0.2);
+        }
+        .header h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .header h1 span { background: linear-gradient(135deg, #818cf8, #f472b6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .header p { color: #94a3b8; font-size: 0.95rem; }
+
+        /* Status Bar */
+        .status-bar {
+            display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap;
+        }
+        .status-card {
+            flex: 1; min-width: 200px;
+            padding: 1rem 1.25rem;
+            background: rgba(30,41,59,0.6);
+            border-radius: 12px;
+            border: 1px solid rgba(51,65,85,0.5);
+        }
+        .status-card .label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+        .status-card .value { font-size: 1.1rem; font-weight: 600; margin-top: 0.25rem; }
+        .status-card .value.ok { color: #34d399; }
+        .status-card .value.warn { color: #fbbf24; }
+
+        /* Section */
+        .section { margin-bottom: 2rem; }
+        .section-title {
+            font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem;
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+
+        /* Healthy endpoints */
+        .endpoint-row {
+            display: flex; align-items: center; gap: 1rem;
+            padding: 0.75rem 1rem;
+            background: rgba(30,41,59,0.4);
+            border-radius: 10px;
+            margin-bottom: 0.5rem;
+            border: 1px solid rgba(51,65,85,0.3);
+            transition: all 0.2s;
+        }
+        .endpoint-row:hover { background: rgba(30,41,59,0.7); border-color: rgba(99,102,241,0.3); }
+        .method { font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px; background: #166534; color: #4ade80; }
+        .path { font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; flex: 1; }
+        .desc { color: #94a3b8; font-size: 0.85rem; }
+        .try-btn {
+            padding: 0.4rem 1rem; border-radius: 8px; border: none; cursor: pointer;
+            font-size: 0.8rem; font-weight: 600; font-family: 'Inter', sans-serif;
+            background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.3);
+            transition: all 0.2s;
+        }
+        .try-btn:hover { background: rgba(99,102,241,0.3); }
+
+        /* Error trigger buttons */
+        .trigger-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.75rem;
+        }
+        .trigger-card {
+            padding: 1rem 1.25rem;
+            background: rgba(30,41,59,0.5);
+            border-radius: 12px;
+            border: 1px solid rgba(51,65,85,0.4);
+            cursor: pointer;
+            transition: all 0.25s;
+            position: relative;
+            overflow: hidden;
+        }
+        .trigger-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, #ef4444, #f97316);
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .trigger-card:hover { border-color: rgba(239,68,68,0.4); transform: translateY(-2px); }
+        .trigger-card:hover::before { opacity: 1; }
+        .trigger-card.firing { border-color: #ef4444; animation: pulse-red 0.6s; }
+        .trigger-card .error-type { font-size: 0.7rem; font-weight: 700; color: #f87171; text-transform: uppercase; letter-spacing: 0.05em; }
+        .trigger-card .error-msg { font-size: 0.85rem; margin-top: 0.3rem; color: #cbd5e1; }
+        .trigger-card .severity {
+            display: inline-block; font-size: 0.65rem; font-weight: 600; padding: 0.15rem 0.5rem;
+            border-radius: 4px; margin-top: 0.5rem;
+        }
+        .severity.critical { background: rgba(239,68,68,0.2); color: #f87171; }
+        .severity.high { background: rgba(249,115,22,0.2); color: #fb923c; }
+        .severity.medium { background: rgba(251,191,36,0.2); color: #fbbf24; }
+
+        /* Fire All Button */
+        .fire-all {
+            display: block; width: 100%; padding: 1rem; margin-top: 1rem;
+            background: linear-gradient(135deg, #dc2626, #ea580c);
+            border: none; border-radius: 12px; cursor: pointer;
+            font-size: 1rem; font-weight: 700; font-family: 'Inter', sans-serif;
+            color: white; transition: all 0.3s;
+            box-shadow: 0 4px 20px rgba(220,38,38,0.3);
+        }
+        .fire-all:hover { transform: translateY(-2px); box-shadow: 0 6px 30px rgba(220,38,38,0.4); }
+        .fire-all:active { transform: translateY(0); }
+        .fire-all.loading { opacity: 0.7; cursor: wait; }
+
+        /* Response panel */
+        .response-panel {
+            margin-top: 1.5rem; padding: 1rem 1.25rem;
+            background: rgba(15,23,42,0.8);
+            border-radius: 12px;
+            border: 1px solid rgba(51,65,85,0.5);
+            display: none;
+        }
+        .response-panel.visible { display: block; animation: fadeIn 0.3s; }
+        .response-panel .resp-header { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .response-panel pre {
+            font-size: 0.8rem; color: #94a3b8; white-space: pre-wrap; word-break: break-all;
+            max-height: 300px; overflow-y: auto; line-height: 1.5;
+        }
+        .resp-success { color: #34d399; }
+        .resp-error { color: #f87171; }
+
+        @keyframes pulse-red { 0%,100%{box-shadow:none} 50%{box-shadow: 0 0 20px rgba(239,68,68,0.4)} }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+        .footer { text-align: center; margin-top: 3rem; color: #475569; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💳 <span>Demo Payment API</span></h1>
+            <p>Simulated microservice with real Sentry error monitoring</p>
+        </div>
+
+        <!-- Status -->
+        <div class="status-bar">
+            <div class="status-card"><div class="label">Service</div><div class="value ok" id="svc-status">● Healthy</div></div>
+            <div class="status-card"><div class="label">Version</div><div class="value">v1.2.0</div></div>
+            <div class="status-card"><div class="label">Sentry</div><div class="value ok" id="sentry-status">Checking...</div></div>
+            <div class="status-card"><div class="label">Errors Triggered</div><div class="value" id="error-count">0</div></div>
+        </div>
+
+        <!-- Healthy Endpoints -->
+        <div class="section">
+            <div class="section-title">✅ Healthy Endpoints (Always Work)</div>
+            <div class="endpoint-row">
+                <span class="method">GET</span>
+                <span class="path">/api/health</span>
+                <span class="desc">Health check</span>
+                <button class="try-btn" onclick="tryEndpoint('/api/health')">Try It</button>
+            </div>
+            <div class="endpoint-row">
+                <span class="method">GET</span>
+                <span class="path">/api/payments</span>
+                <span class="desc">List payments</span>
+                <button class="try-btn" onclick="tryEndpoint('/api/payments')">Try It</button>
+            </div>
+        </div>
+
+        <!-- Error Triggers -->
+        <div class="section">
+            <div class="section-title">🔴 Error Triggers (Sends Real Errors to Sentry)</div>
+            <div class="trigger-grid">
+                <div class="trigger-card" onclick="triggerError('/trigger/db-connection', this)">
+                    <div class="error-type">ConnectionError</div>
+                    <div class="error-msg">PostgreSQL max connections reached (100/100)</div>
+                    <span class="severity critical">CRITICAL</span>
+                </div>
+                <div class="trigger-card" onclick="triggerError('/trigger/timeout', this)">
+                    <div class="error-type">TimeoutError</div>
+                    <div class="error-msg">Payment API request timeout after 30s</div>
+                    <span class="severity high">HIGH</span>
+                </div>
+                <div class="trigger-card" onclick="triggerError('/trigger/oom', this)">
+                    <div class="error-type">MemoryError</div>
+                    <div class="error-msg">OOM killed: worker exceeded 2GB limit</div>
+                    <span class="severity critical">CRITICAL</span>
+                </div>
+                <div class="trigger-card" onclick="triggerError('/trigger/redis', this)">
+                    <div class="error-type">ConnectionError</div>
+                    <div class="error-msg">Redis cluster node unreachable — failover</div>
+                    <span class="severity critical">CRITICAL</span>
+                </div>
+                <div class="trigger-card" onclick="triggerError('/trigger/config', this)">
+                    <div class="error-type">ValueError</div>
+                    <div class="error-msg">Missing env var DB_HOST in config</div>
+                    <span class="severity medium">MEDIUM</span>
+                </div>
+                <div class="trigger-card" onclick="triggerError('/trigger/disk', this)">
+                    <div class="error-type">OSError</div>
+                    <div class="error-msg">Disk space critical at 95% capacity</div>
+                    <span class="severity high">HIGH</span>
+                </div>
+                <div class="trigger-card" onclick="triggerError('/trigger/ssl', this)">
+                    <div class="error-type">ConnectionError</div>
+                    <div class="error-msg">SSL certificate expired — HTTPS failing</div>
+                    <span class="severity critical">CRITICAL</span>
+                </div>
+                <div class="trigger-card" onclick="triggerError('/trigger/k8s-crash', this)">
+                    <div class="error-type">RuntimeError</div>
+                    <div class="error-msg">K8s CrashLoopBackOff — 5 restarts in 10min</div>
+                    <span class="severity critical">CRITICAL</span>
+                </div>
+            </div>
+
+            <button class="fire-all" id="fire-all-btn" onclick="fireAll()">
+                🔥 TRIGGER ALL ERRORS (8 errors → Sentry)
+            </button>
+        </div>
+
+        <!-- Response Panel -->
+        <div class="response-panel" id="response-panel">
+            <div class="resp-header"><span id="resp-icon">📡</span> <span id="resp-title">Response</span></div>
+            <pre id="resp-body"></pre>
+        </div>
+
+        <div class="footer">
+            Demo Payment API — Built for DevOps Incident Investigator hackathon 🏴‍☠️
+        </div>
+    </div>
+
+    <script>
+        let errorCount = 0;
+
+        // Check health on load
+        fetch('/api/health')
+            .then(r => r.json())
+            .then(d => {
+                document.getElementById('sentry-status').textContent = '● Connected';
+                document.getElementById('sentry-status').className = 'value ok';
+            })
+            .catch(() => {
+                document.getElementById('sentry-status').textContent = '● Offline';
+                document.getElementById('sentry-status').className = 'value warn';
+            });
+
+        function showResponse(title, icon, body, isError) {
+            const panel = document.getElementById('response-panel');
+            document.getElementById('resp-title').textContent = title;
+            document.getElementById('resp-icon').textContent = icon;
+            document.getElementById('resp-body').textContent = JSON.stringify(body, null, 2);
+            document.getElementById('resp-title').className = isError ? 'resp-error' : 'resp-success';
+            panel.className = 'response-panel visible';
+            panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function tryEndpoint(path) {
+            fetch(path)
+                .then(r => r.json())
+                .then(d => showResponse(`${path} — 200 OK`, '✅', d, false))
+                .catch(e => showResponse(`${path} — Error`, '❌', {error: e.message}, true));
+        }
+
+        function triggerError(path, card) {
+            if (card) { card.classList.add('firing'); setTimeout(() => card.classList.remove('firing'), 600); }
+            fetch(path)
+                .then(r => r.json())
+                .then(d => {
+                    errorCount++;
+                    document.getElementById('error-count').textContent = errorCount;
+                    showResponse(`Error sent to Sentry!`, '🚨', d, true);
+                })
+                .catch(e => {
+                    errorCount++;
+                    document.getElementById('error-count').textContent = errorCount;
+                    showResponse('Error triggered!', '🚨', {error: e.message}, true);
+                });
+        }
+
+        function fireAll() {
+            const btn = document.getElementById('fire-all-btn');
+            btn.classList.add('loading');
+            btn.textContent = '⏳ Sending 8 errors to Sentry...';
+            fetch('/trigger/all')
+                .then(r => r.json())
+                .then(d => {
+                    errorCount += d.count || 8;
+                    document.getElementById('error-count').textContent = errorCount;
+                    btn.textContent = '✅ All 8 errors sent! Check Sentry dashboard';
+                    btn.classList.remove('loading');
+                    showResponse('All errors triggered!', '🔥', d, true);
+                    setTimeout(() => { btn.textContent = '🔥 TRIGGER ALL ERRORS (8 errors → Sentry)'; }, 5000);
+                })
+                .catch(e => {
+                    btn.textContent = '🔥 TRIGGER ALL ERRORS (8 errors → Sentry)';
+                    btn.classList.remove('loading');
+                    showResponse('Fire all failed', '❌', {error: e.message}, true);
+                });
+        }
+    </script>
+</body>
+</html>
