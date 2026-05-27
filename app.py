@@ -310,3 +310,11 @@ if __name__ == "__main__":
 ╚══════════════════════════════════════════════════════════════╝
 """)
     app.run(host="0.0.0.0", port=5001, debug=False)
+
+# Redis Caching Configuration
+# Added caching layer for payment lookups
+# NOTE: Redis cluster has 3 nodes, failover is automatic
+
+REDIS_CLUSTER_NODES = ["redis-01:6379", "redis-02:6379", "redis-03:6379"]
+REDIS_CACHE_TTL = 300
+
