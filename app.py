@@ -79,8 +79,16 @@ def index():
 
 @app.route("/api/health")
 def health():
-    """Health check — always returns OK."""
-    return jsonify({"status": "healthy", "service": "payment-api", "version": "1.2.0", "uptime": "3d 14h 22m"})
+    """Health check — returns array of endpoints for demo dashboard."""
+    import time
+    import random
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    return jsonify([
+        {"endpoint": "/api/v2/charge", "status": "healthy", "response_time_ms": random.randint(30, 60), "timestamp": now},
+        {"endpoint": "/api/v2/refund", "status": "healthy", "response_time_ms": random.randint(20, 40), "timestamp": now},
+        {"endpoint": "/api/v2/webhook", "status": "degraded", "response_time_ms": random.randint(200, 300), "timestamp": now},
+        {"endpoint": "/api/v2/balance", "status": "healthy", "response_time_ms": random.randint(15, 30), "timestamp": now}
+    ])
 
 
 @app.route("/api/payments")
