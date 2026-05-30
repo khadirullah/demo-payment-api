@@ -54,7 +54,7 @@ Open **http://localhost:5001** in your browser.
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/` | Web UI with trigger buttons |
-| `GET` | `/api/health` | Health check — returns `{"status": "healthy"}` |
+| `GET` | `/api/health` | Health check — returns array of endpoint status metrics |
 | `GET` | `/api/payments` | Mock payments list — 5 sample payments |
 
 ### Error Triggers (Send Real Errors to Sentry)
