@@ -119,4 +119,4 @@ The Investigator will correlate:
 
 ## Built For
 
-[Pirates of the Coral-bean hackathon](https://wemakedevs.org/hackathons/coral) 🏴‍☠️ — Powered by [Coral SQL](https://withcoral.com)
+[Pirates of the Coral-bean hackathon](https://wemakedevs.org/hackathons/coral) 🏴‍☠️ — Powered by [Coral SQL](https://withcoral.com). 
